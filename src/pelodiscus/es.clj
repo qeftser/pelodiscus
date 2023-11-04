@@ -1,5 +1,6 @@
 (ns pelodiscus.es
   (:require [pelodiscus.fuzz :as fuzz]
+            [pelodiscus.util :refer [val-sort-map]]
             [clojure.edn :as edn]))
 
 ;;;; This file  holds the expert system shell related code.
@@ -39,15 +40,15 @@
   VAR: x - should be a key"
   [x]
   (reset! expert-system x)
-  (if (false? (get @question-sets x false))
+  (when (false? (get @question-sets x false))
     (swap! question-sets assoc x {}))
-  (if (false? (get @rule-sets x false))
+  (when (false? (get @rule-sets x false))
     (swap! rule-sets assoc x {}))
-  (if (false? (get @rule-num x false))
+  (when (false? (get @rule-num x false))
     (swap! rule-num assoc x 0))
-  (if (false? (get @system-default x false))
+  (when (false? (get @system-default x false))
     (swap! system-default assoc x "-"))
-  (if (false? (get @system-sharpness x false))
+  (when (false? (get @system-sharpness x false))
     (swap! system-sharpness assoc x 15)))
 
 (defn in-system 
@@ -215,13 +216,6 @@
   (swap! session-rules update-in [n t] assoc get-value
          ((get-in @session-rules [n t get-value]))))
 
-(defn val-sort-map 
-  "Sorts a map by values and returns a sorted map."
-  [m]
-  (into (sorted-map-by (fn [key1 key2]
-                         (compare [(get m key2) key2]
-                                  [(get m key1) key1])))
-        m))
 
 (defn conditions-counted 
   "Returns all condition keys in a given expert system ordered by 
@@ -423,7 +417,7 @@
                                                         (rules-with-condition considering gval)))
                                             (let [rules (passing-rules considering)]
                                             `(~(unevaluated-conditions-counted rules :required) 
-                                              ~(unevaluated-conditions-counted rules :normal) ~rules)))
+                                              ~(conditions-counted rules :normal) ~rules)))
                (not-empty normal-stack) (let [gval (first normal-stack)]
                                           (dorun (map #(eval-condition % :normal gval)
                                                       (rules-with-condition considering gval)))
