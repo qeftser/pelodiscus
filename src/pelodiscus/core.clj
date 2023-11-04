@@ -1,6 +1,5 @@
-(ns pelodiscus.core)
+(ns pelodiscus.core
+  (:require [pelodiscus.fuzz :as fuzz]
+            [pelodiscus.es :as es]))
 
-(defn foo
-  "I don't do a whole lot."
-  [x]
-  (println x "Hello, World!"))
+;; This will run the expert system when I actually finish the project
