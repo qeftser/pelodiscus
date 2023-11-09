@@ -23,7 +23,7 @@
 (def question-sets    "Holds all questions defined in each expert system."                                                                          (atom {:default {}}))
 (def rule-sets        "Holds all rule sets defined in each expert system."                                                                          (atom {:default {}}))
 (def rule-num         "Holds the number of rules in each expert system."                                                                            (atom {:default 0}))
-(def system-sharpness "Holds the degree of sharpness to apply to the gaussian norm in the 'is' function for each expert system."                    (atom {:default 15}))
+(def system-sharpness "Holds the degree of sharpness to apply to the gaussian norm in the 'is' function for each expert system."                    (atom {:default 20}))
 (def system-default   "Holds the default response for each expert system. This will be shown if no suitable rule is found."                         (atom {:default "default response"}))
 (def session-data     "Holds the current known values in the given session."                                                                        (atom {}))
 (def session-rules    "Holds the current rules in the given session. Nessesary because rules evaluate lambda expressions as the system progresses." (atom {}))
@@ -31,7 +31,6 @@
 ;; =====================================================================================================
 ;; Setup
 ;; =====================================================================================================
-
 
 (defn def-system
   "Defines a new expert system name space and 
@@ -51,14 +50,14 @@
   (when (false? (get @system-sharpness x false))
     (swap! system-sharpness assoc x 15)))
 
-(defn in-system 
+(defn in-system
   "Sets the current expert system namespace.
   VAR: x - should be a key to an 
            existing expert-system namespace"
   [x]
   (reset! expert-system x))
 
-(defn new-session 
+(defn new-session
   "Clears old session data and reloads rule set in 
   current expert system namespace."
   []
@@ -69,7 +68,7 @@
 ;; Questions
 ;; =====================================================================================================
 
-(defn question 
+(defn question
   "Defines a new standard question in the current expert system namespace.
   VAR: get-value - the value the question will aquire. Should be a key.
   VAR: text - the text provided as a prompt to the user."
@@ -77,7 +76,7 @@
   (swap! question-sets update-in [@expert-system] assoc get-value {:text text})
   'question-created)
 
-(defn range-question 
+(defn range-question
   "Defines a new ranged question in the current expert system namespace.
   VAR: get-value - the value the question will aquire. Should be a key.
   VAR: text - the text provided as a prompt to the user.
@@ -89,7 +88,7 @@
   (swap! question-sets update-in [@expert-system] assoc get-value {:text text :low low :high high})
   'range-question-created)
 
-(defn t-f-question 
+(defn t-f-question
   "Defines a new T/F or Y/N question in the current expert system namespace.
   This function will prompt the user again if a value of T, Y, F, or N
   is not entered.
@@ -114,7 +113,7 @@
           (flush)
           (recur low high)))))
 
-(defn get-t-f 
+(defn get-t-f
   "Accepts an input and returns true when it is T or Y and false when
   it is F or N. If input is anything else prompt the user again.
   Not called directly by user."
@@ -127,7 +126,7 @@
       (cond (or (= output "T") (= output "Y")) 1
             :else 0))))
 
-(defn get-num 
+(defn get-num
   "Accepts an input and returns it when the input is a number. Otherwise,
   prompt the user again and get another input. Not directly called by the 
   user."
@@ -139,7 +138,7 @@
           (flush)
           (recur)))))
 
-(defn ask-question 
+(defn ask-question
   "Directing function for questions. Asks either a range, t-f, or standard
   question based on the type associated with the provided value. Question to 
   ask is determined by the current expert system namespace.
@@ -151,7 +150,7 @@
           (get question :low false) (get-in-range (get question :low) (get question :high))
           :else (get-num))))
 
-(defn value 
+(defn value
   "Will return a value unless there is no associated question. Returns the
   value associated with the provided key in the current session data.
   VAR: get-value - the key to the value requested."
@@ -167,12 +166,12 @@
 ;; Conditions - Rules
 ;; =====================================================================================================
 
-(defn rule-count 
+(defn rule-count
   "Returns the total number of rules in the current expert system namespace."
   []
   (@rule-num @expert-system))
 
-(defn rule 
+(defn rule
   "Creates a new rule in the current expert system namespace.
   VAR: text - this is the text shown if the rule is chosen as the
               final one to apply.
@@ -193,7 +192,7 @@
     :normal (apply merge normal)})
   (swap! rule-num update-in [@expert-system] inc))
 
-(defn condition 
+(defn condition
   "Some syntatic sugar over a single key-value map. Used in
   conjunction with the rule function.
   VAR: get-value - the value being used in the condition.
@@ -205,7 +204,7 @@
   [get-value function]
   {get-value function})
 
-(defn eval-condition 
+(defn eval-condition
   "Evaluates the lambda function in the provided rule and updates
   the session-rules accordingly.
   VAR: n - the rule number
@@ -216,8 +215,7 @@
   (swap! session-rules update-in [n t] assoc get-value
          ((get-in @session-rules [n t get-value]))))
 
-
-(defn conditions-counted 
+(defn conditions-counted
   "Returns all condition keys in a given expert system ordered by 
   how often they occur in decreasing order.
   METHOD 1:
@@ -233,7 +231,7 @@
    (if (empty? n)
      (keys (val-sort-map m))
      (let [k (keys (get-in @session-rules [(first n) t]))]
-       (recur t (rest n) (merge (map #(if (get m %) {% (inc (get m %))} {% 1}) k)))))))
+       (recur t (rest n) (reduce #(update-in %1 [%2] (fnil inc 0)) m k))))))
 
 (defn unevaluated-conditions-counted
   "Removes all conditions with found values from the list returned by
@@ -248,14 +246,14 @@
   dependent on the given value key.
   VAR: to-check - a list of the rule numbers to check
   VAR: get-value - the value the function is searching for"
-  [to-check get-value]
+  [to-check get-value t]
   (filter identity
-          (map #(if (or (get-in @session-rules [% :required get-value])
-                        (get-in @session-rules [% :normal get-value]))
+          (map #(if (or (get-in @session-rules [% t get-value])
+                        (get-in @session-rules [% t get-value]))
                   % nil)
                to-check)))
 
-(defn meets-requirements? 
+(defn meets-requirements?
   "Returns true if none of the :required conditions in the
   given rule are false. Returns false otherwise.
   Non-evaluated conditions are considered true. 
@@ -264,26 +262,26 @@
   (not-any? false? (vals (get-in @session-rules [n :required]))))
 
 (defn failing-rules
- "Returns the numbers of all rules failing in the given session-rules.
+  "Returns the numbers of all rules failing in the given session-rules.
  A rule is failing if meets-requirements? returns false for it.
-  VAR: to-check - a list of the rule numbers to check" 
+  VAR: to-check - a list of the rule numbers to check"
   [to-check]
   (filter identity
           (map #(if (not (meets-requirements? %))
                   % nil)
                to-check)))
 
-(defn passing-rules 
- "Returns the numbers of all rules passing in the given session-rules.
+(defn passing-rules
+  "Returns the numbers of all rules passing in the given session-rules.
  A rule is passing of meets-requirements? returns true for it.
-  VAR: to-check - a list of the rule numbers to check" 
+  VAR: to-check - a list of the rule numbers to check"
   [to-check]
   (filter identity
           (map #(if (meets-requirements? %)
                   % nil)
                to-check)))
 
-(defn total-conditions 
+(defn total-conditions
   "Returns the total number of :normal condition in the
   given rule. :required is ignored because this function is
   only used in computing certainty.
@@ -291,7 +289,7 @@
   [n]
   (count (get-in @session-rules [n :normal])))
 
-(defn set-default 
+(defn set-default
   "Sets the default rule for the current expert system. This rule
   will be shown only if all other rules fail their nessesary conditions.
   VAR: x - the default rule message string"
@@ -302,7 +300,7 @@
 ;; Certainty
 ;; =====================================================================================================
 
-(defn set-sharpness 
+(defn set-sharpness
   "Sets the sharpness value used by the function is.
   This sets the sharpness for the current 
   expert system namespace only.
@@ -310,13 +308,13 @@
   [x]
   (swap! system-sharpness assoc @expert-system x))
 
-(defn sharpness 
+(defn sharpness
   "Gets the sharpness value for the current expert
   system namespace."
   []
   (get @system-sharpness @expert-system))
 
-(defn within-degree 
+(defn within-degree
   "Is the value greater than or equal to 1 - cutoff?
   VAR: cutoff - one minus this value is compared to x
   VAR: x - the value in question"
@@ -336,15 +334,15 @@
   VAR: f - the peak of the gaussian norm
   VAR: scale - the scale to multiply f by. 
                This is used as syntatic sugar."
-  ([x f]
-   (let [result (fuzz/gaussian x (sharpness) f)]
-     (if (< result 0.0001)
-       0
-       result)))
+  ([x f] (is x f 1))
   ([x f scale]
-   (is x (* f scale))))
+   (if (= scale 0) 0
+       (let [result (fuzz/gaussian (/ (value x) scale) (sharpness) f)]
+         (if (< result 0.0001)
+           0
+           result)))))
 
-(defn calculate-certainty 
+(defn calculate-certainty
   "Sets the :certainty field of a rule to the average of all :normal
   condition values. Updates in session-rules.
   VAR: n - the rule to evaluate"
@@ -353,28 +351,28 @@
          (/ (apply + (vals (get-in @session-rules [n :normal])))
             (total-conditions n))))
 
-(defn get-certainty 
+(defn get-certainty
   "Returns the certainty for the given rule in the current session-rules.
   Value is zero when certainty is uncalculated.
   VAR: n - the rule in question"
   [n]
   (get-in @session-rules [n :certainty]))
 
-(defn get-text 
+(defn get-text
   "Returns the value in the text field of the given rule in the
   current session-rules.
   VAR: n - the rule in question"
   [n]
   (get-in @session-rules [n :text]))
 
-(defn certainty-comperator 
+(defn certainty-comperator
   "Compares two rules by certainty
   VAR: a - rule one
   VAR: b - rule two"
   [a b]
   (> (get-certainty a) (get-certainty b)))
 
-(defn order-by-certainty 
+(defn order-by-certainty
   "Returns a list of rule numbers in decreasing order by certainty.
   Maps over session-rules.
   VAR: to-check - the rules to compare."
@@ -414,28 +412,28 @@
          (cond (empty? considering) (println (get @system-default @expert-system))
                (not-empty required-stack) (let [gval (first required-stack)]
                                             (dorun (map #(eval-condition % :required gval)
-                                                        (rules-with-condition considering gval)))
+                                                        (rules-with-condition considering gval :required)))
                                             (let [rules (passing-rules considering)]
-                                            `(~(unevaluated-conditions-counted rules :required) 
-                                              ~(conditions-counted rules :normal) ~rules)))
+                                              `(~(unevaluated-conditions-counted rules :required)
+                                                ~(conditions-counted rules :normal) ~rules)))
                (not-empty normal-stack) (let [gval (first normal-stack)]
                                           (dorun (map #(eval-condition % :normal gval)
-                                                      (rules-with-condition considering gval)))
+                                                      (rules-with-condition considering gval :normal)))
                                           `(nil ~(rest normal-stack) ~considering))
                :else (do
                        (dorun (map calculate-certainty considering))
                        (println "CERTAINTIES: " (map get-certainty considering))
                        (println "ORDERED BY : " (order-by-certainty considering))
                        (println (get-text (first (order-by-certainty considering)))
-                                "With certainty: " (get-certainty (first (order-by-certainty considering))))
+                                "\nWith certainty: " (get-certainty (first (order-by-certainty considering))))
                        nil))]
      (if nr (recur (nth nr 0) (nth nr 1) (nth nr 2))
          'sayonara)))
   ([] (new-session)
-   (let [rules (range (rule-count))]
-      (run-system (conditions-counted rules :required)
-                  (conditions-counted rules :normal)
-                  rules)))
+      (let [rules (range (rule-count))]
+        (run-system (conditions-counted rules :required)
+                    (conditions-counted rules :normal)
+                    rules)))
   ([x] (in-system x) (run-system)))
 
 
