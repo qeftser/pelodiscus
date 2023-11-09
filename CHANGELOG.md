@@ -6,3 +6,6 @@ project started
 
 ## 03/11/2023 23:00
 iteration one completed - useable project
+
+## 08/11/2023 22:45
+Now the project actually works
