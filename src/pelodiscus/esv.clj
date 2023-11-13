@@ -226,3 +226,20 @@
    (reset! session-what (get system-what @system-what))
    (reset! session-data (merge (map #(hash-map % 0.5) (keys @session-rules))))))
 
+(defn collect-and-rule [x] x)
+
+(defn collect-or-rule [x]
+  (merge (map #(if (sequential? %) (if (= :and (first %)) 
+                                     (collect-and-rule (rest %))
+                                     (collect-or-rule (rest %)))
+                 %)
+              x)))
+                                     
+(defn collect-and-rule [x]
+  (if (sequential? (first x))
+    (if (= :and (first (first x)))
+      (recur (rest (first x)))
+      (collect-or-rule (rest (first x))))
+    (first x)))
+
+
