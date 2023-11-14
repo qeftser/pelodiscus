@@ -15,7 +15,6 @@
 
 {:if 'A :relates 'B}
 
-
 (def system-rules (atom {:default {}}))
 (def session-rules (atom {}))
 
@@ -77,10 +76,10 @@
 
 (defn check [x y]
   (let [nx (value x)]
-  (if (keyword? nx)
-    (if (= nx y)
-      1 0)
-    (fuzz/gaussian  nx 15 y))))
+    (if (keyword? nx)
+      (if (= nx y)
+        1 0)
+      (fuzz/gaussian  nx 15 y))))
 
 (defn if-then-unless-eval [a b c]
   (let [if-degree     (check (first a) (last a))
@@ -117,8 +116,8 @@
   ([value options text]
    (cond (map? options)
          (let [values (keys options)]
-             (println text)
-             (println "Plese enter one of the following:")
+           (println text)
+           (println "Plese enter one of the following:")
            (map #(print "%s, " %) (rest values))
            (print (first values) ".\n>> ")
            (let [ret (read-line)]
@@ -129,17 +128,17 @@
                    :else (do (println "AAAHH!!! Value entered not one of options listed")
                              (recur value options text)))))
          (number? options)
-         (do 
+         (do
            (println text)
            (println "Enter a number from " (first options) " to " (last options))
-             (print ">> ")
-             (let [ret (read-line)]
-               (cond (= ret "why") (do (why-handler) (recur value options text))
-                     (= ret "what") (do (what-handler value) (recur value options text)))
-               (let [nret (read-string ret)]
-                 (if (and (number? ret) (< (first options) ret (last options)))
-                   (update-certainty value (scale value (first options) (last options)))
-                   (recur value options text)))))
+           (print ">> ")
+           (let [ret (read-line)]
+             (cond (= ret "why") (do (why-handler) (recur value options text))
+                   (= ret "what") (do (what-handler value) (recur value options text)))
+             (let [nret (read-string ret)]
+               (if (and (number? ret) (< (first options) ret (last options)))
+                 (update-certainty value (scale value (first options) (last options)))
+                 (recur value options text)))))
          :else (eval-question value text)))
   ([value text]
    (println text)
@@ -183,11 +182,11 @@
 
 (defn valid-question? [x]
   (let [values (second x)]
-    (if (and (string? (get values :text)) (or (and (sequential? (get values :options)) 
+    (if (and (string? (get values :text)) (or (and (sequential? (get values :options))
                                                    (number? (first x))
                                                    (number? (last x)))
                                               (nil? (get values :options))
-                                         (map? (get values :options))))
+                                              (map? (get values :options))))
       nil
       (println "MALFORMED QUESTION: " x))))
 
@@ -206,7 +205,7 @@
                      (symbol? then-cond))
                 (and if-cond relates-cond)
                 (and (sequential? if-cond) (symbol? (first if-cond))
-                     (sequential? relates-cond) 
+                     (sequential? relates-cond)
                      (or (= :with (first relates-cond)) (= :against (first relates-cond)))
                      (symbol? (last relates-cond)))
                 :else false))
@@ -218,9 +217,9 @@
     nil
     (println "MALFORMED RULE: " x)))
 
-(defn new-session 
+(defn new-session
   ([x] (in-system x) (new-session))
-  ([] 
+  ([]
    (reset! session-questions (get system-questions @current-system))
    (reset! session-rules (get system-rules @current-system))
    (reset! session-what (get system-what @system-what))
@@ -229,17 +228,65 @@
 (defn collect-and-rule [x] x)
 
 (defn collect-or-rule [x]
-  (merge (map #(if (sequential? %) (if (= :and (first %)) 
+  (merge (map #(if (sequential? %) (if (= :and (first %))
                                      (collect-and-rule (rest %))
                                      (collect-or-rule (rest %)))
-                 %)
+                   %)
               x)))
-                                     
+
 (defn collect-and-rule [x]
   (if (sequential? (first x))
     (if (= :and (first (first x)))
       (recur (rest (first x)))
       (collect-or-rule (rest (first x))))
     (first x)))
+
+(defn collect-rules [x]
+  (let [ret (if (= :and (first x))
+              (collect-and-rule (rest x))
+              (collect-or-rule (rest x)))]
+    (if (seqable? ret)
+      (flatten ret)
+      ret)))
+
+(defn eval-and-sequence-for-condition [x y])
+
+(defn eval-or-sequence-for-condition [x y]
+  (cond (and (seqable? y) (seq (rest y)))
+        (if (= (first y) :and)
+          (cons :and (eval-and-sequence-for-condition x (rest y)))
+          (cons :or (remove nil? (map #(eval-or-sequence-for-condition x %) (rest y)))))
+        (and (seqable? y) (not (seq (rest y))))
+        nil
+        (map? y)
+        (if (= x (first (get y :if)))
+          (println y)
+          y)))
+
+(defn eval-and-sequence-for-condition [x y]
+  (let [va (first y)]
+    (cond (and (seqable? va) (seq (rest va)))
+          (let [ev (eval-or-sequence-for-condition x va)]
+            (if ev
+              (cons ev (rest y))
+              (rest y)))
+          (and (seqable? va) (not (seq (rest va))))
+          nil
+          (map? va)
+          (if (= x (first (get va :if)))
+            (do (println va)
+                (rest y))
+            y))))
+
+(defn eval-sequence-for-condition [x y]
+  (if (= (first y) :or)
+    (eval-or-sequence-for-condition x y)
+    (cons :and (eval-and-sequence-for-condition x (rest y)))))
+    
+
+
+
+
+
 
 
