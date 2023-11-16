@@ -1,5 +1,7 @@
 (ns pelodiscus.esv
-  (:require [pelodiscus.fuzz :as fuzz]))
+  (:require [pelodiscus.fuzz :as fuzz]
+            [pelodiscus.util :refer [val-sort-map]]
+            [clojure.edn :as edn]))
 
 ;;;; A new - hopefully better - expert system implementation
 
@@ -14,6 +16,16 @@
 {:if 'A :then 'B :unless 'C}
 
 {:if 'A :relates 'B}
+
+(def nonfactor 0)
+(def very-low 0.1)
+(def low 0.25)
+(def moderatly-low 0.35)
+(def moderate 0.5)
+(def moderatly-high 0.65)
+(def high 0.75)
+(def very-high 0.9)
+(def exactly 1)
 
 (def system-rules (atom {:default {}}))
 (def session-rules (atom {}))
@@ -34,6 +46,22 @@
 (defn rule? [x]
   (contains? @session-rules x))
 
+(defn rulestruct? [x]
+  (if (map? x)
+    (let [if-cond (get x :if)
+          then-cond (get x :then)
+          unless-cond (get x :unless)
+          relates-cond (get x :relates)]
+      (if (or (and if-cond then-cond unless-cond)
+              (and if-cond then-cond)
+              (and if-cond unless-cond))
+        true
+        false))
+    false))
+
+(defn get-question [x])
+(defn eval-question [x])
+
 (defn value [x]
   (cond (contains? @session-data x) (get @session-data x)
         (question? x) (let [q (get-question x)]
@@ -52,10 +80,23 @@
           (println "IF " (first if-cond) " IS " (last if-cond) " THEN "
                    then-cond " IS TRUE.")
           (and if-cond relates-cond)
-          (do (print "THE DEGREE " (first if-cond) " IS " (last if-cond))
-              (cond (= :with (first relates-cond))
-                    (println " POSITIVELY IMPACTS " (last relates-cond))
-                    :else (println " NEGATIVELY IMPACTS " (last relates-cond)))))))
+          (if (sequential? if-cond)
+            (do (print "THE DEGREE " (first if-cond) " IS " (last if-cond))
+                (cond (= :with (first relates-cond))
+                      (println " POSITIVELY IMPACTS " (last relates-cond))
+                      :else (println " NEGATIVELY IMPACTS " (last relates-cond))))
+            (do (print "THE DEGREE " if-cond " IS TRUE ")
+                (cond (= :with (first relates-cond))
+                      (println " POSITIVELY IMPACTS " (last relates-cond))
+                      :else (println " NEGATIVELY IMPACTS " (last relates-cond))))))))
+
+(defn print-rules [x]
+  (cond (sequential? x) (doall (map print-rules x))
+        (rulestruct? x) (print-rule x)))
+
+(defn print-all-rules []
+  (doall (map (comp print-rules second) @session-rules))
+  'fin)
 
 (defn what-handler [x]
   (if (contains? @session-what x)
@@ -71,8 +112,9 @@
 (defn update-certainty [x y]
   (let [data (get @session-data x)]
     (if data
-      (swap! session-data assoc x (/ (+ data y) 2))
-      (swap! session-data assoc x y))))
+      (let [v (/ (+ data y) 2)]
+        (swap! session-data assoc x v))
+      (do (swap! session-data assoc x y) y))))
 
 (defn check [x y]
   (let [nx (value x)]
@@ -92,7 +134,9 @@
     (update-certainty b degree)))
 
 (defn if-relates-with-eval [a b]
-  (let [if-degree (check (first a) (last a))]
+  (let [if-degree (if (sequential? a)
+                    (check (first a) (last a))
+                    (value a))]
     (cond (= (first b) :with)
           (update-certainty (last b) if-degree)
           (= (first b) :against)
@@ -120,6 +164,7 @@
            (println "Plese enter one of the following:")
            (map #(print "%s, " %) (rest values))
            (print (first values) ".\n>> ")
+           (flush)
            (let [ret (read-line)]
              (cond (= ret "why") (do (why-handler) (recur value options text))
                    (= ret "what") (do (what-handler value) (recur value options text))
@@ -127,33 +172,42 @@
                    (update-certainty value (get options ret))
                    :else (do (println "AAAHH!!! Value entered not one of options listed")
                              (recur value options text)))))
-         (number? options)
+         (sequential? options)
          (do
            (println text)
            (println "Enter a number from " (first options) " to " (last options))
            (print ">> ")
+           (flush)
            (let [ret (read-line)]
-             (cond (= ret "why") (do (why-handler) (recur value options text))
-                   (= ret "what") (do (what-handler value) (recur value options text)))
-             (let [nret (read-string ret)]
-               (if (and (number? ret) (< (first options) ret (last options)))
-                 (update-certainty value (scale value (first options) (last options)))
-                 (recur value options text)))))
+             (cond (= ret "why") (do (why-handler) (eval-question value options text))
+                   (= ret "what") (do (what-handler value) (eval-question value options text)))
+             (let [nret (edn/read-string ret)]
+               (if (and (number? nret) (< (first options) nret (last options)))
+                 (update-certainty value (scale nret (first options) (last options)))
+                 (eval-question value options text)))))
          :else (eval-question value text)))
   ([value text]
    (println text)
-   (println "Enter a numver from 0 to 1")
+   (println "Enter a number from 0 to 1")
+   (print ">> ")
+   (flush)
    (let [ret (read-line)]
-     (cond (= ret "why") (do (why-handler) (recur value text))
-           (= ret "what") (do (what-handler value) (recur value text)))
-     (let [nret (read-string ret)]
-       (if (and (number? ret) (< 0 ret 1))
-         (update-certainty value ret)
+     (cond (= ret "why") (do (why-handler) (eval-question value text))
+           (= ret "what") (do (what-handler value) (eval-question value text)))
+     (let [nret (edn/read-string ret)]
+       (if (and (number? nret) (< 0 nret 1))
+         (update-certainty value nret)
          (do (println "Given value either not a number or not in range")
              (recur value text)))))))
 
 (defn get-question [x]
   (get @session-questions x))
+
+(defn replace-in-seq [old new s]
+  (cond (sequential? s) (map #(replace-in-seq old new %) s)
+        (map? s) (into {} (map #(if (= (second %) old) [(first %) new] %) s))
+        (= old s) new
+        :else s))
 
 (defn def-system [x]
   (if (contains? @system-questions x)
@@ -178,7 +232,7 @@
   (swap! system-what update-in [@current-system] assoc value text))
 
 (defn def-rule [value rulestructure]
-  (swap! system-rules update-in [@current-system] assoc value rulestructure))
+  (swap! system-rules update-in [@current-system] assoc value (replace-in-seq :it value rulestructure)))
 
 (defn valid-question? [x]
   (let [values (second x)]
@@ -204,7 +258,7 @@
                 (and (sequential? if-cond) (symbol? (first if-cond))
                      (symbol? then-cond))
                 (and if-cond relates-cond)
-                (and (sequential? if-cond) (symbol? (first if-cond))
+                (and (or (and (sequential? if-cond) (symbol? (first if-cond))) (keyword? if-cond))
                      (sequential? relates-cond)
                      (or (= :with (first relates-cond)) (= :against (first relates-cond)))
                      (symbol? (last relates-cond)))
@@ -220,10 +274,10 @@
 (defn new-session
   ([x] (in-system x) (new-session))
   ([]
-   (reset! session-questions (get system-questions @current-system))
-   (reset! session-rules (get system-rules @current-system))
-   (reset! session-what (get system-what @system-what))
-   (reset! session-data (merge (map #(hash-map % 0.5) (keys @session-rules))))))
+   (reset! session-questions (get @system-questions @current-system))
+   (reset! session-rules (get @system-rules @current-system))
+   (reset! session-what (get @system-what @system-what))
+   (reset! session-data (apply merge (map #(hash-map % 0.5) (keys @session-rules))))))
 
 (defn collect-and-rule [x] x)
 
@@ -245,48 +299,87 @@
   (let [ret (if (= :and (first x))
               (collect-and-rule (rest x))
               (collect-or-rule (rest x)))]
-    (if (seqable? ret)
+    (if (sequential? ret)
       (flatten ret)
       ret)))
 
-(defn eval-and-sequence-for-condition [x y])
+(defn collect-all-rules []
+  (flatten (map (comp collect-rules second) @session-rules)))
 
-(defn eval-or-sequence-for-condition [x y]
-  (cond (and (seqable? y) (seq (rest y)))
-        (if (= (first y) :and)
-          (cons :and (eval-and-sequence-for-condition x (rest y)))
-          (cons :or (remove nil? (map #(eval-or-sequence-for-condition x %) (rest y)))))
-        (and (seqable? y) (not (seq (rest y))))
-        nil
-        (map? y)
-        (if (= x (first (get y :if)))
-          (println y)
-          y)))
+(defn or-eval [x r])
+(defn and-eval [x r])
 
-(defn eval-and-sequence-for-condition [x y]
-  (let [va (first y)]
-    (cond (and (seqable? va) (seq (rest va)))
-          (let [ev (eval-or-sequence-for-condition x va)]
-            (if ev
-              (cons ev (rest y))
-              (rest y)))
-          (and (seqable? va) (not (seq (rest va))))
-          nil
-          (map? va)
-          (if (= x (first (get va :if)))
-            (do (println va)
-                (rest y))
-            y))))
+(defn rule-eval [x r]
+  (let [del (first r)
+        ret (if (= del :and)
+              (and-eval x (rest r))
+              (or-eval x (rest r)))]
+    (cond (and ret (= del :and))
+          (cons :and ret)
+          (and ret (= del :or))
+          (cons :or ret)
+          :else nil)))
 
-(defn eval-sequence-for-condition [x y]
-  (if (= (first y) :or)
-    (eval-or-sequence-for-condition x y)
-    (cons :and (eval-and-sequence-for-condition x (rest y)))))
-    
+(defn and-eval [x l]
+  (cond (empty? l) nil
+        (sequential? (first l)) (remove nil? (cons (rule-eval x (first l)) (rest l)))
+        (or (= x (get (first l) :if)) (= x (first (get (first l) :if)))) (do (eval-rule (first l)) (rest l))
+        :else l))
 
+(defn or-eval [x l]
+  (if (empty? l) nil
+      (remove nil? (map #(if (sequential? %) (rule-eval x %)
+                             (if (or (= (get % :if) x)
+                                     (= (first (get % :if)) x)) (eval-rule %)
+                                 %)) l))))
 
+(defn eval-rules [x]
+  (map #(swap! session-rules assoc (first %) (rule-eval x (second %))) @session-rules))
 
+(defn distill-rule [x]
+  (let [if-cond (get x :if)
+        then-cond (get x :then)
+        relates-cond (get x :relates)]
+    (cond (and if-cond then-cond)
+          (list (first if-cond) then-cond)
+          (and relates-cond (keyword? if-cond))
+          (list if-cond relates-cond)
+          :else (list (first if-cond) relates-cond))))
 
+(defn distill-rules []
+  (map distill-rule (collect-all-rules)))
+
+(defn count-value-keywords [x l]
+  (count (remove #(not (= x (first %))) l)))
+
+(defn remove-below-cutoff [x l]
+  (remove #(<= (value (second %)) x) l))
+
+(defn cut-to [x l]
+  (if (or (empty? l) (= x 0)) nil
+      (cons (first l)
+            (cut-to (dec x) (rest l)))))
+
+(defn sort-rules [x]
+  (let [i1 (cut-to 5 (sort-by (comp value second) > x))]
+    (sort-by #(count-value-keywords (first %) i1) > i1)))
+
+(defn conclude []
+  (let [c (first (remove question? (val-sort-map @session-data)))]
+    (println "\nCONCLUSION: " (first c))
+    (println "\n CERTAINTY: " (second c))
+    (what-handler (first c))))
+
+(defn cycle-system []
+  (let [val (first (first (sort-rules (distill-rules))))]
+    (if val
+      (do (doall (eval-rules val)) (recur))
+      (conclude))))
+
+(defn run-system
+  ([x] (in-system x) (run-system))
+  ([] (new-session)
+      (cycle-system)))
 
 
 
