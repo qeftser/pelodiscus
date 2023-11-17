@@ -9,3 +9,6 @@ iteration one completed - useable project
 
 ## 08/11/2023 22:45
 Now the project actually works
+
+## 16/11/2023 22:40
+iteration one completed - better project

@@ -42,14 +42,14 @@
 (def-question :exaggeration [0 10] (str "Enter the degree to which this character is likely\n"
                                         "to exaggerate thier abilities on a scale from 0 to 10:"))
 
-(def-rule :dojikko [:or 
+(def-rule :dojikko [:and 
                     {:if [:agressive-tendency very-low] :then :it}
                     [:or 
                      {:if [:emotion-expression high] :then :it}
                      {:if [:positive-expression moderatly-high] :then :it}
                      {:if [:intelligence moderatly-low] :then :it}]])
 
-(def-rule :tsundere [:or
+(def-rule :tsundere [:and
                      {:if [:emotion-expression high] :then :it}
                      {:if [:agressive-tendency high] :then :it}
                      {:if [:violent-tendency very-low] :then :it}
@@ -59,13 +59,13 @@
                       {:if [:intelligence moderatly-high] :then :it}
                       {:if [:romantic-tendency high] :then :it}]])
 
-(def-rule :meganekko [:or
+(def-rule :meganekko [:and
                       {:if [:intelligence very-high] :then :it}
                       [:or
                        {:if [:emotion-expression low] :then :it}
                        {:if [:agressive-tendency low] :then :it}]])
 
-(def-rule :chuunibyo [:or
+(def-rule :chuunibyo [:and
                       {:if [:emotion-expression very-high] :then :it}
                       {:if [:exaggeration very-high] :then :it}
                       [:or
@@ -74,59 +74,59 @@
                        {:if [:agressive-tendency moderate] :then :it}
                        {:if [:superiority moderatly-high] :then :it}]])
 
-(def-rule :kuudere [:or
+(def-rule :kuudere [:and
                     {:if [:emotion-expression very-low] :then :it}
                     {:if [:social-interaction very-low] :then :it}
                     [:or
                      {:if [:intelligence high] :then :it}]])
 
-(def-rule :dandere [:or 
+(def-rule :dandere [:and 
                     {:if [:agressive-tendency very-low] :then :it}
                     {:if [:social-interaction low] :then :it}
                     [:or 
                      {:if [:emotion-expression moderate] :then :it}
                      {:if [:romantic-tendency low] :then :it}]])
 
-(def-rule :yangire [:or 
+(def-rule :yangire [:and 
                     {:if [:agressive-tendency very-high] :then :it}
                     {:if [:violent-tendency very-high] :then :it}
                     [:or 
                      {:if [:romantic-tendency low] :then :it}
                      {:if [:emotion-expression high] :then :it}]])
 
-(def-rule :himedere [:or
+(def-rule :himedere [:and
                      {:if [:superiority high] :then :it}
                      [:or 
                       {:if [:emotion-expression moderatly-high] :then :it}
                       {:if [:negative-expression moderatly-high] :then :it}
                       {:if [:agressive-tendency moderate] :then :it}]])
 
-(def-rule :yandere [:or
+(def-rule :yandere [:and
                     {:if [:agressive-tendency very-high] :then :it}
                     {:if [:violent-tendency very-high] :then :it}
                     {:if [:romantic-tendency very-high] :then :it}
                     [:or
                      {:if [:emotion-expression high] :then :it}]])
 
-(def-rule :osananajimi [:or 
+(def-rule :osananajimi [:and 
                         {:if [:social-interaction moderate] :then :it}
                         {:if [:romantic-tendency high] :then :it}])
 
-(def-rule :lolimouto [:or 
+(def-rule :lolimouto [:and 
                       {:if [:positive-expression high] :then :it}
                       {:if [:negative-expression low] :then :it}
                       [:or
                        {:if [:emotion-expression high] :then :it}
                        {:if [:romantic-tendency low] :then :it}]])
 
-(def-rule :genki [:or
+(def-rule :genki [:and
                   {:if [:positive-expression high] :then :it}
                   {:if [:negative-expression very-low] :then :it}
                   [:or 
                    {:if [:emotion-expression high] :then :it}
                    {:if [:social-interaction high] :then :it}]])
 
-(def-rule :fujoshi [:or 
+(def-rule :fujoshi [:and 
                     {:if [:romantic-tendency very-high] :then :it}
                     [:or 
                      {:if [:emotion-expression high] :then :it}

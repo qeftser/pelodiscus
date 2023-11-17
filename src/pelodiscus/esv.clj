@@ -107,7 +107,10 @@
   (print-rule @current-question))
 
 (defn scale [x l h]
-  (/ x (- (abs h) (abs l))))
+  (assert (> h l) "low value higher than high value")
+  (if (and (neg? l) (pos? h))
+    (recur (- x l) (- l l) (- h l))
+    (abs (/ x (abs (- h l))))))
 
 (defn update-certainty [x y]
   (let [data (get @session-data x)]
@@ -121,12 +124,12 @@
     (if (keyword? nx)
       (if (= nx y)
         1 0)
-      (fuzz/gaussian  nx 15 y))))
+      (fuzz/gaussian  nx 20 y))))
 
 (defn if-then-unless-eval [a b c]
   (let [if-degree     (check (first a) (last a))
         unless-degree (check (first c) (last c))
-        degree        (min 0 (- if-degree unless-degree))]
+        degree        (max 0 (- if-degree unless-degree))]
     (update-certainty b degree)))
 
 (defn if-then-eval [a b]
@@ -162,7 +165,7 @@
          (let [values (keys options)]
            (println text)
            (println "Plese enter one of the following:")
-           (map #(print "%s, " %) (rest values))
+           (dorun (map #(print (format "%s, " %)) (rest values)))
            (print (first values) ".\n>> ")
            (flush)
            (let [ret (read-line)]
@@ -182,7 +185,7 @@
              (cond (= ret "why") (do (why-handler) (eval-question value options text))
                    (= ret "what") (do (what-handler value) (eval-question value options text)))
              (let [nret (edn/read-string ret)]
-               (if (and (number? nret) (< (first options) nret (last options)))
+               (if (and (number? nret) (<= (first options) nret (last options)))
                  (update-certainty value (scale nret (first options) (last options)))
                  (eval-question value options text)))))
          :else (eval-question value text)))
@@ -195,7 +198,7 @@
      (cond (= ret "why") (do (why-handler) (eval-question value text))
            (= ret "what") (do (what-handler value) (eval-question value text)))
      (let [nret (edn/read-string ret)]
-       (if (and (number? nret) (< 0 nret 1))
+       (if (and (number? nret) (<= 0 nret 1))
          (update-certainty value nret)
          (do (println "Given value either not a number or not in range")
              (recur value text)))))))
@@ -204,9 +207,9 @@
   (get @session-questions x))
 
 (defn replace-in-seq [old new s]
-  (cond (sequential? s) (map #(replace-in-seq old new %) s)
-        (map? s) (into {} (map #(if (= (second %) old) [(first %) new] %) s))
-        (= old s) new
+  (cond (= old s) new
+        (sequential? s) (map #(replace-in-seq old new %) s)
+        (map? s) (into {} (map #(vector (first %) (replace-in-seq old new (second %))) s))
         :else s))
 
 (defn def-system [x]
@@ -312,7 +315,7 @@
 (defn rule-eval [x r]
   (let [del (first r)
         ret (if (= del :and)
-              (and-eval x (rest r))
+              (or-eval x (rest r))
               (or-eval x (rest r)))]
     (cond (and ret (= del :and))
           (cons :and ret)
@@ -329,9 +332,11 @@
 (defn or-eval [x l]
   (if (empty? l) nil
       (remove nil? (map #(if (sequential? %) (rule-eval x %)
-                             (if (or (= (get % :if) x)
-                                     (= (first (get % :if)) x)) (eval-rule %)
-                                 %)) l))))
+                             (let [gi (get % :if)]
+                               (if (or (= gi x)
+                                     (and (sequential? gi) 
+                                          (= (first gi) x))) (do (eval-rule %) nil)
+                                 %))) l))))
 
 (defn eval-rules [x]
   (map #(swap! session-rules assoc (first %) (rule-eval x (second %))) @session-rules))
@@ -343,11 +348,11 @@
     (cond (and if-cond then-cond)
           (list (first if-cond) then-cond)
           (and relates-cond (keyword? if-cond))
-          (list if-cond relates-cond)
-          :else (list (first if-cond) relates-cond))))
+          (list if-cond (second relates-cond))
+          :else (list (first if-cond) (second relates-cond)))))
 
 (defn distill-rules []
-  (map distill-rule (collect-all-rules)))
+  (remove (comp nil? first) (map distill-rule (collect-all-rules))))
 
 (defn count-value-keywords [x l]
   (count (remove #(not (= x (first %))) l)))
@@ -361,20 +366,27 @@
             (cut-to (dec x) (rest l)))))
 
 (defn sort-rules [x]
-  (let [i1 (cut-to 5 (sort-by (comp value second) > x))]
+  (let [i1 (cut-to 5 (remove-below-cutoff 0.45 (sort-by (comp value second) > x)))]
     (sort-by #(count-value-keywords (first %) i1) > i1)))
 
 (defn conclude []
-  (let [c (first (remove question? (val-sort-map @session-data)))]
-    (println "\nCONCLUSION: " (first c))
-    (println "\n CERTAINTY: " (second c))
+  (let [c (first (val-sort-map (into {} (remove (comp question? first) @session-data))))]
+    (println "CONCLUSION: " (first c))
+    (println " CERTAINTY: " (second c))
     (what-handler (first c))))
+
+(defn conclude-tst []
+  (let [c (val-sort-map (into {} (remove (comp question? first) @session-data)))]
+    (map #(do (println "CONCLUSION: " (first %))
+              (println " CERTAINTY: " (second %))
+              (what-handler (first %))) c)))
 
 (defn cycle-system []
   (let [val (first (first (sort-rules (distill-rules))))]
+    (doall (conclude-tst))
     (if val
       (do (doall (eval-rules val)) (recur))
-      (conclude))))
+      (conclude-tst))))
 
 (defn run-system
   ([x] (in-system x) (run-system))
