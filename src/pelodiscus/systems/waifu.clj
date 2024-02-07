@@ -3,7 +3,7 @@
 
 ;; Waifu classifying expert system. I think it is pretty cool but
 ;; it might actually be kind of dumb. This is a good example of
-;; how questions and rules are arranged and it has made me relize
+;; how questions and rules are arranged and it has made me realize
 ;; some of the problems with my current system.
 
 (def-system :waifu)
