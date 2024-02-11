@@ -8,8 +8,8 @@ values and degrees of relation to certain conditions.
 
 There are two different systems included here. One is the namespace pelodiscus.es and the other is pelodiscus.esv. es was the first iteration of the expert system, and esv was the second, with the v standing for verbose. The systems are not cross compatable so don't try to load both of them at once, as you will get some issues. Each system functions in a similar way. You start by declaring a new namespace for the system, if you want to have multiple in one session. Otherwise you can just load and run the default. Then you declare rules and conclusions using the syntax of the system. This is all done in clojure, but the resulting look for the verbose system is much closer to english. Both systems have several options for rule types, and the verbose system allows for control over rule evaluation order.
 
-## Usage: esv
-The esv system is much better than the es system as it is more extensible and looks more like English. I will provide a brief overview here, but the code is also documented and there are some examples in the systems folder. I highly recommend using the esv system over the es one, the es system is there as reference for how the esv system improves things. 
+## Usage
+There are two systems in this project: es and esv. The es was my first iteration and is much less user friendly. The esv system is much better than the es system as it is more extensible and looks more like English. I will provide a brief overview here, and there are also some examples in the systems folder. I highly recommend using the esv system over the es one, the es system is there as reference for how the esv system improves things. 
 ### Setup
 Make sure to include esv in your clojure namespace:
 ```
@@ -113,13 +113,13 @@ If you get an error that esv is not a valid namespace try including it in your r
 > (load "esv")
 ```
 If you are running the repl in the pelodiscus project though, this shouldn't be an issue.
-### Demo
+## Demo
 
 
 https://github.com/qeftser/pelodiscus/assets/144874443/1e2d1cdd-3a13-460a-b284-e488e4018abd
 
 
-### Why the name?
+## Why the name?
 
 Pelodiscus is a sub-species of soft shell turtles. The soft shell turtle
 has a soft shell, so I thought it was a fitting namesake
