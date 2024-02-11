@@ -20,6 +20,8 @@ Then set the system namespace and enter it:
 ```
 (define-system :my-system)
 (in-system :my-system)
+
+(system :my-system) ;; Same as above
 ```
 ### Variables
 There are some simple global variables provided in the system for ease of use:
@@ -89,6 +91,8 @@ You can use def-what to add context or an explanation to values:
                                       question associated with this value")
 (def-what :outcome-1 "This will print if the selected outcome is chosen as most likely at the end of the expert system's collection of input
                       you should make sure to define this for outcomes so the user knows what the conclusion the recived means")
+(def-what :my-system "This will display when the system starts running to give the user context as to what it does.
+                      you should make sure to include this as well")
 ```
 ### Running the system
 First open a clojure repl and load the expert system file:
@@ -109,7 +113,13 @@ If you get an error that esv is not a valid namespace try including it in your r
 > (load "esv")
 ```
 If you are running the repl in the pelodiscus project though, this shouldn't be an issue.
-## Why the name?
+### Demo
+
+
+https://github.com/qeftser/pelodiscus/assets/144874443/1e2d1cdd-3a13-460a-b284-e488e4018abd
+
+
+### Why the name?
 
 Pelodiscus is a sub-species of soft shell turtles. The soft shell turtle
 has a soft shell, so I thought it was a fitting namesake
