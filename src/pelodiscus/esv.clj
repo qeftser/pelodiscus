@@ -5,18 +5,6 @@
 
 ;;;; A new - hopefully better - expert system implementation
 
-;; Basic 
-
-;; Unless
-
-;; Gradual
-
-{:if 'A :then 'B}
-
-{:if 'A :then 'B :unless 'C}
-
-{:if 'A :relates 'B}
-
 (def nonfactor 0)
 (def very-low 0.1)
 (def low 0.25)
@@ -147,6 +135,7 @@
           :else (throw (Exception. "Given b condition is not one of [:with :against]")))))
 
 (defn eval-rule [x]
+  (reset! current-question x)
   (let [if-cond      (get x :if)
         then-cond    (get x :then)
         unless-cond  (get x :unless)
@@ -163,45 +152,53 @@
   ([value options text]
    (cond (map? options)
          (let [values (keys options)]
+           (newline)
            (println text)
-           (println "Plese enter one of the following:")
+           (println "Plese enter one of the following:\n")
            (dorun (map #(print (format "%s, " %)) (rest values)))
-           (print (first values) ".\n>> ")
+           (print (first values) "\n\n>> ")
            (flush)
            (let [ret (read-line)]
              (cond (= ret "why") (do (why-handler) (recur value options text))
                    (= ret "what") (do (what-handler value) (recur value options text))
+                   (or (= ret "q") (= ret "quit")) (println "exiting")
                    (some true? (map #(= ret %) values))
                    (update-certainty value (get options ret))
-                   :else (do (println "AAAHH!!! Value entered not one of options listed")
+                   :else (do (println "Value entered is not one of options listed")
                              (recur value options text)))))
          (sequential? options)
          (do
+           (newline)
            (println text)
            (println "Enter a number from " (first options) " to " (last options))
-           (print ">> ")
+           (print "\n>> ")
            (flush)
            (let [ret (read-line)]
-             (cond (= ret "why") (do (why-handler) (eval-question value options text))
-                   (= ret "what") (do (what-handler value) (eval-question value options text)))
-             (let [nret (edn/read-string ret)]
-               (if (and (number? nret) (<= (first options) nret (last options)))
-                 (update-certainty value (scale nret (first options) (last options)))
-                 (eval-question value options text)))))
+             (cond (= ret "why") (do (why-handler) (recur value options text))
+                   (= ret "what") (do (what-handler value) (recur value options text))
+                   (or (= ret "q") (= ret "quit")) (println "exiting")
+                   :else
+                   (let [nret (edn/read-string ret)]
+                     (if (and (number? nret) (<= (first options) nret (last options)))
+                       (update-certainty value (scale nret (first options) (last options)))
+                       (eval-question value options text))))))
          :else (eval-question value text)))
   ([value text]
+   (newline)
    (println text)
    (println "Enter a number from 0 to 1")
-   (print ">> ")
+   (print "\n>> ")
    (flush)
    (let [ret (read-line)]
-     (cond (= ret "why") (do (why-handler) (eval-question value text))
-           (= ret "what") (do (what-handler value) (eval-question value text)))
-     (let [nret (edn/read-string ret)]
-       (if (and (number? nret) (<= 0 nret 1))
-         (update-certainty value nret)
-         (do (println "Given value either not a number or not in range")
-             (recur value text)))))))
+     (cond (= ret "why") (do (why-handler) (recur value text))
+           (= ret "what") (do (what-handler value) (recur value text))
+           (or (= ret "q") (= ret "quit")) (println "exiting")
+           :else
+           (let [nret (edn/read-string ret)]
+             (if (and (number? nret) (<= 0 nret 1))
+               (update-certainty value nret)
+               (do (println "Given value either not a number or not in range")
+                   (recur value text))))))))
 
 (defn get-question [x]
   (get @session-questions x))
@@ -240,10 +237,11 @@
 (defn valid-question? [x]
   (let [values (second x)]
     (if (and (string? (get values :text)) (or (and (sequential? (get values :options))
-                                                   (number? (first x))
-                                                   (number? (last x)))
+                                                   (number? (first (get values :options)))
+                                                   (number? (last (get values :options))))
                                               (nil? (get values :options))
-                                              (map? (get values :options))))
+                                              (and (map? (get values :options))
+                                                   (every? #(string? (first %)) (get values :options)))))
       nil
       (println "MALFORMED QUESTION: " x))))
 
@@ -254,23 +252,23 @@
               unless-cond (get x :unless)
               relates-cond (get x :relates)]
           (cond (and if-cond then-cond unless-cond)
-                (and (sequential? if-cond) (symbol? (first if-cond))
-                     (symbol? then-cond)
-                     (sequential? unless-cond) (symbol? (first relates-cond)))
+                (and (sequential? if-cond) (keyword? (first if-cond))
+                     (keyword? then-cond)
+                     (sequential? unless-cond) (keyword? (first unless-cond)))
                 (and if-cond then-cond)
-                (and (sequential? if-cond) (symbol? (first if-cond))
-                     (symbol? then-cond))
+                (and (sequential? if-cond) (keyword? (first if-cond))
+                     (keyword? then-cond))
                 (and if-cond relates-cond)
-                (and (or (and (sequential? if-cond) (symbol? (first if-cond))) (keyword? if-cond))
+                (and (or (and (sequential? if-cond) (keyword? (first if-cond))) (keyword? if-cond))
                      (sequential? relates-cond)
                      (or (= :with (first relates-cond)) (= :against (first relates-cond)))
-                     (symbol? (last relates-cond)))
+                     (keyword? (last relates-cond)))
                 :else false))
         (sequential? x)
         (and (or (= (first x) :and) (= (first x) :or)) (every? valid-rulestructure? (rest x)))))
 
 (defn valid-rule? [x]
-  (if (valid-rulestructure? (second x))
+  (if (valid-rulestructure? x)
     nil
     (println "MALFORMED RULE: " x)))
 
@@ -279,7 +277,7 @@
   ([]
    (reset! session-questions (get @system-questions @current-system))
    (reset! session-rules (get @system-rules @current-system))
-   (reset! session-what (get @system-what @system-what))
+   (reset! session-what (get @system-what @current-system))
    (reset! session-data (apply merge (map #(hash-map % 0.5) (keys @session-rules))))))
 
 (defn collect-and-rule [x] x)
@@ -334,9 +332,9 @@
       (remove nil? (map #(if (sequential? %) (rule-eval x %)
                              (let [gi (get % :if)]
                                (if (or (= gi x)
-                                     (and (sequential? gi) 
-                                          (= (first gi) x))) (do (eval-rule %) nil)
-                                 %))) l))))
+                                       (and (sequential? gi)
+                                            (= (first gi) x))) (do (eval-rule %) nil)
+                                   %))) l))))
 
 (defn eval-rules [x]
   (map #(swap! session-rules assoc (first %) (rule-eval x (second %))) @session-rules))
@@ -381,17 +379,23 @@
               (println " CERTAINTY: " (second %))
               (what-handler (first %))) c)))
 
+(defn validate-session []
+  (doall (map valid-question? @session-questions))
+  (doall (map valid-rulestructure? (collect-all-rules))))
+
 (defn cycle-system []
   (let [val (first (first (sort-rules (distill-rules))))]
-    (doall (conclude-tst))
+;;    (doall (conclude))
     (if val
       (do (doall (eval-rules val)) (recur))
-      (conclude-tst))))
+      (conclude))))
 
 (defn run-system
   ([x] (in-system x) (run-system))
-  ([] (new-session)
-      (cycle-system)))
+  ([]  (new-session)
+       (what-handler @current-system)
+       (validate-session)
+       (cycle-system)))
 
 
 
